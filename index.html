@@ -1,384 +1,1028 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>癌症照護品管儀表板</title>
-  
-  <!-- 載入 Tailwind CSS (處理畫面排版與顏色) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- 載入 React 核心庫 -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  
-  <!-- 載入 Recharts 圖表庫與依賴 -->
-  <script crossorigin src="https://unpkg.com/prop-types/prop-types.min.js"></script>
-  <script crossorigin src="https://unpkg.com/recharts@2/umd/Recharts.min.js"></script>
-  
-  <!-- 載入 Babel (用於在瀏覽器直接編譯 JSX 語法) -->
-  <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-</head>
-<body class="bg-slate-50">
-  <div id="root"></div>
-  
-  <script type="text/babel">
-    const { useState, useMemo } = React;
-    const { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, ReferenceLine } = window.Recharts;
+import React, { useMemo, useState } from "react";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceLine,
+  Cell,
+  Legend,
+  LabelList,
+} from "recharts";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowLeft,
+  CalendarRange,
+  CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  Filter,
+  LayoutDashboard,
+  Stethoscope,
+  TrendingUp,
+} from "lucide-react";
 
-    // --- 圖示元件定義 (替代外部套件，確保單一檔案獨立運行) ---
-    const Icon = ({ path, className="w-5 h-5" }) => (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
+const YEARS = ["2022", "2023", "2024", "2025"];
+const MONTHS = Array.from({ length: 12 }, (_, i) => ({
+  index: i,
+  key: i + 1,
+  label: `${i + 1}月`,
+}));
+const QUARTERS = [
+  { key: "Q1", label: "Q1", months: [0, 1, 2] },
+  { key: "Q2", label: "Q2", months: [3, 4, 5] },
+  { key: "Q3", label: "Q3", months: [6, 7, 8] },
+  { key: "Q4", label: "Q4", months: [9, 10, 11] },
+];
+
+const indicatorMeta = {
+  化學治療靜脈給藥過程完成率: { type: "avg", isNegative: false, unit: "%" },
+  化療藥品外滲處理過程完成率: { type: "avg", isNegative: false, unit: "%" },
+  化療藥品外滲發生處理完成率: { type: "avg", isNegative: false, unit: "%" },
+  非起疱性化療藥品外滲發生件數: { type: "sum", isNegative: true, unit: "件" },
+  起疱性化療藥品外滲發生件數: { type: "sum", isNegative: true, unit: "件" },
+  針劑型化療給藥護理紀錄完整率: { type: "avg", isNegative: false, unit: "%" },
+  針劑型化療藥品給藥異常件數: { type: "sum", isNegative: true, unit: "件" },
+  護理師處理化療給藥自我安全防護完整率: {
+    type: "avg",
+    isNegative: false,
+    unit: "%",
+  },
+};
+
+const rawData = [
+  {
+    year: "2022",
+    indicator: "化學治療靜脈給藥過程完成率",
+    target: 100,
+    monthly: [null, null, 99.2, null, null, null, null, null, 99.6, null, null, null],
+    review:
+      "未達目標值，原因為受評護理師不熟悉作業規範，2023年將使用LINE@提供容易取得的標準作業流程，以利熟悉操作流程。因屬於2023年全方位癌症防治策進計畫應辦業務與診療品質認證監測項目，2023年持續每半年監測一次。",
+  },
+  {
+    year: "2022",
+    indicator: "化療藥品外滲處理過程完成率",
+    target: 100,
+    monthly: [null, null, null, null, null, 98.6, null, null, null, null, null, null],
+    review:
+      "未達目標值，原因為受評護理師不熟悉外滲預防與處置認知或是自我填寫認知題目未能專注，2023年針對未達目標值的護理師提供線上教學課程。因屬於2023年全方位癌症防治策進計畫應辦業務與診療品質認證監測項目，2023年持續每年監測一次。",
+  },
+  {
+    year: "2022",
+    indicator: "針劑型化療給藥護理紀錄完整率",
+    target: 98,
+    monthly: [null, null, 95, null, null, null, null, null, 98.4, null, null, null],
+    review:
+      "未達目標值，原因為受評護理師不熟悉化療給藥相關紀錄作業規範，2023年針對未達目標值的單位護理師提供線上教學課程。因屬於2023年全方位癌症防治策進計畫應辦業務與診療品質認證監測項目，2023年持續每半年監測一次。",
+  },
+  {
+    year: "2022",
+    indicator: "護理師處理化療給藥自我安全防護完整率",
+    target: 100,
+    monthly: [null, null, 98.9, null, null, null, null, null, 99.1, null, null, null],
+    review:
+      "未達目標值，原因為受評護理師不熟悉使用個人安全防護裝備的作業規範，2023年將使用LINE@提供容易取得的標準作業流程，以利熟悉操作流程。因屬於2023年全方位癌症防治策進計畫應辦業務與診療品質認證監測項目，2023年持續每半年監測一次。",
+  },
+  {
+    year: "2022",
+    indicator: "起疱性化療藥品外滲發生件數",
+    target: 0,
+    monthly: [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+    review:
+      "未達目標值，全年度共發生1件，原因為病童(1歲)持續滴注起疱性化療藥品(Doxorubicin)期間身體不適(有嘔吐)且頻繁哭鬧，將加強照顧者指導技巧。因屬於2023年全方位癌症防治策進計畫應辦業務與診療品質認證監測項目，2023年持續每月監測。",
+  },
+  {
+    year: "2023",
+    indicator: "化學治療靜脈給藥過程完成率",
+    target: 100,
+    monthly: [null, null, 98.8, null, null, null, null, null, 99.5, null, null, null],
+    review:
+      "未達目標值，主要缺失包括：(1)未進行病人辨識(2)未於藥品外袋標示給藥流速(3)未確認病人/家屬已簽署「癌症藥物治療說明暨同意書」。主要原因:護理師忙碌臨床工作，未能充分關注這些缺失項目的背景和實施重要性。改善措施:設計教材並錄製教學影片，並於關鍵重點設計互動題目，以確保護理師理解與重視。另外，護理長亦透過宣導來強化這些項目的重視度。因屬2024年全方位癌症防治策進計畫應辦業務與癌症診療品質認證監測項目，2024年持續監測。",
+  },
+  {
+    year: "2023",
+    indicator: "化療藥品外滲處理過程完成率",
+    target: 100,
+    monthly: [null, null, null, null, null, 99, null, null, null, null, null, null],
+    review:
+      "未達目標值，完成率較低的項目為：(1)外滲發生後住院期間皮膚觀察記錄方式為何？(94.6%)；(2)本院起疱性化療藥品外滲後續追蹤機制為何？(94.6%)。主要原因:單位較少施打起疱性化療藥品，因此不熟悉作業規範。單位已個別指導與單位內部宣導。此項指標評核項目為確認護理師對化療藥品外滲預防與處置作業規範內容的理解，因此預計將作業規範內容整合至教材，並設計互動問題影音教材和課後測驗，開設數位課程並調訓護理師閱讀教材，以達到全面宣導的目的。2024年取消監測，並新增監測指標為「化療藥品外滲發生處理完成率」。",
+  },
+  {
+    year: "2023",
+    indicator: "針劑型化療給藥護理紀錄完整率",
+    target: 97,
+    monthly: [null, null, null, 98.2, null, null, null, null, null, 99.4, null, null],
+    review: "達目標值，2024年持續監測。",
+  },
+  {
+    year: "2023",
+    indicator: "護理師處理化療給藥自我安全防護完整率",
+    target: 100,
+    monthly: [null, null, 99.4, null, null, null, null, null, 99.7, null, null, null],
+    review:
+      "未達目標值，主要缺失包括：(1)換接化療藥品點滴袋，未低於眼睛的高度操作(2)未使用護目鏡或防護面罩。主要原因：(1)護理師有自信能謹慎操作而未能遵守安全措施(2)護理師錯認為一般眼鏡與護目鏡有相同保護效果。改善措施：已由單位護理長進行個別指導，並確認後續操作能落實。因屬於2024年全方位癌症防治策進計畫應辦業務監測項目，2024年持續監測。",
+  },
+  {
+    year: "2023",
+    indicator: "起疱性化療藥品外滲發生件數",
+    target: 0,
+    monthly: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    review:
+      "未達目標值，全年度共發生1件，主要原因為疑似11個月病童翻身擠壓角針，導致角針從PortA移位並脫落，造成藥品滲漏至皮下。改善措施：於人工血管角針敷料上方以宜拉膠帶加壓固定，以預防病童睡覺時因翻身導致擠壓角針移位，並加強照顧者預防病童角針脫落的技巧。因屬於2024年全方位癌症防治策進計畫應辦業務與癌症診療品質認證監測項目，2024年持續監測。",
+  },
+  {
+    year: "2024",
+    indicator: "化學治療靜脈給藥過程完成率",
+    target: 100,
+    monthly: [null, null, null, null, 98.5, null, null, null, null, null, 98.1, null],
+    review:
+      "未達目標值，缺失包括：(1)未進行病人辨識，(2)未完成條碼檢核再將化療藥品點滴袋上的spike與adapter相互銜接。原因為護理師未完全理解執行這些步驟的重要性。改善措施包括單位進行內部教育宣導或進行改善專案。此指標屬於2025年全方位癌症防治策進計畫，2025年持續監測。",
+  },
+  {
+    year: "2024",
+    indicator: "化療藥品外滲發生處理完成率",
+    target: 100,
+    monthly: [80, null, 100, 91.7, null, null, null, null, null, 100, null, null],
+    review:
+      "未達目標值，缺失項目包括：未於24小時內通報異常事件以及未有提供受影響肢端抬高指導的紀錄。經由癌症護理品管會議及護理長內部宣導後，相關問題已改善。2025年持續監測。",
+  },
+  {
+    year: "2024",
+    indicator: "針劑型化療給藥護理紀錄完整率",
+    target: 97,
+    monthly: [null, null, null, 98.4, null, null, null, null, null, 85.2, null, null],
+    review:
+      "未達目標值。上半年監測結果達目標值，因此下半年僅針對完成率較低的三項指標內容進行查核，因查核項目數減少，導致下半年平均值偏低。下半年未達目標值的原因為受評者個人紀錄習慣未養成依據規範執行，由護理長採個別指導，並內部追蹤。2025年持續監測。",
+  },
+  {
+    year: "2024",
+    indicator: "護理師處理化療給藥自我安全防護完整率",
+    target: 100,
+    monthly: [null, null, null, null, 99.1, null, null, null, null, null, 98.3, null],
+    review:
+      "未達目標值，主要缺失為未使用護目鏡或防護面罩。原因是部分護理師未養成使用護目鏡的習慣，及誤認一般眼鏡具備與護目鏡相同的保護效果。改善措施已由單位護理長進行個別指導，並確認後續操作能落實。此指標屬於2025年全方位癌症防治策進計畫的監測項目，2025年持續進行監測。",
+  },
+  {
+    year: "2024",
+    indicator: "起疱性化療藥品外滲發生件數",
+    target: 0,
+    monthly: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    review: "達目標值，此指標屬於2025年全方位癌症防治策進計畫的監測項目，將持續監測。",
+  },
+  {
+    year: "2025",
+    indicator: "化學治療靜脈給藥過程完成率",
+    target: 100,
+    monthly: [null, null, null, null, 99.8, null, null, null, null, null, 99.8, null],
+    review:
+      "未達目標值，缺失包括：未完成條碼檢核再將化療藥品點滴袋上的spike與adapter相互銜接。原因為護理師對此順序必要性的理解不足以及工作流程因素。改善措施包括單位教育宣導和流程改善，同時製作教材全院訓練。此指標屬於2026年全方位癌症防治策進計畫，2026年持續監測。",
+  },
+  {
+    year: "2025",
+    indicator: "化療藥品外滲發生處理完成率",
+    target: 100,
+    monthly: [null, 100, 100, null, 100, null, null, null, null, 100, 100, null],
+    review: "達目標值，藉由紀錄指標確保化療外滲事件能依標準流程處理，2026年持續監測。",
+  },
+  {
+    year: "2025",
+    indicator: "針劑型化療給藥護理紀錄完整率",
+    target: 100,
+    monthly: [null, null, null, 94.7, null, null, null, null, null, 96.4, null, null],
+    review:
+      "未達目標值。完成率最低之兩項評核項目如下：(1)「化療藥品滴注結束後需有回血／外滲紀錄」全年度完成率90.7%，因系統未設置化療給藥結束後之紀錄提示，影響紀錄即時性，將擬運用輸液幫浦回傳訊息設計資訊系統提示機制改善。(2)「病人初次出現副作用當日需有處置或衛教紀錄」全年度達成率92.0%，較去年已有進步。2026年持續測。",
+  },
+  {
+    year: "2025",
+    indicator: "護理師處理化療給藥自我安全防護完整率",
+    target: 100,
+    monthly: [null, null, null, null, 99.3, null, null, null, null, null, 100, null],
+    review:
+      "未達目標值，主要因實務操作中對防護措施重視不足，未確實配戴護目鏡及雙層手套。已由護理長個別指導並確認改善。此指標屬於2026年全方位癌症防治策進計畫的監測項目，2026年持續進行監測。",
+  },
+  {
+    year: "2025",
+    indicator: "起疱性化療藥品外滲發生件數",
+    target: 0,
+    monthly: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    review: "達目標值，此指標屬於2026年全方位癌症防治策進計畫的監測指標，2026年持續監測。",
+  },
+  {
+    year: "2022",
+    indicator: "非起疱性化療藥品外滲發生件數",
+    target: 5,
+    monthly: [0, 0, 2, 1, 2, 0, 0, 0, 2, 0, 0, 1],
+    review: `未達目標值，全年度共發生8件，分述原因如下：1. 4件為成人癌症病人外滲，原因包含病人活動因素(3件)，病人血管因素(1件)；2. 4件為癌症病童外滲，(共計3位病童發生外滲，其中1位重複通報2件)，主要原因照顧者不熟悉病童活動時管路照顧方式。因屬於2023年全方位癌症防治策進計畫應辦業務與診療品質認證監測項目，2023年持續每月監測。
+3月，CTR，同一個案兩次，Port-A
+4月，13PW(Port-A)
+5月，13PW(Port-A)，05W4
+9月，05PE(Port-A)，11C
+12月，13PW(Port-A)`,
+  },
+  {
+    year: "2023",
+    indicator: "非起疱性化療藥品外滲發生件數",
+    target: 7,
+    monthly: [0, 0, 2, 0, 3, 0, 2, 2, 0, 0, 1, 0],
+    review: `未達目標值，全年度共發生10件，其中3件為兒科病童，7件為成人。兒科3件案例原因為病童或其照顧者活動過程不慎拉扯導致，單位進行PDCA改善。成人7件案例，其中3件為人工血管角針從圓盤滑脫導致，原因：(1)病人對固定敷料過敏，睡眠時無意識抓癢導致(2)居家化療期間從事過度拉扯人工血管肢端的肌肉活動導致(3)護理師對人工血管未回血流程處理不熟悉。上述案件藉由教育訓練、單位專案改善與撰寫部內他山之石教案向護理師宣導改善措施。另外4件原因為病人周邊靜脈血管屬於困難周邊靜脈血管(不易觸摸和觀察)導致，已於部內會議宣導這類案例需與醫療團隊討論置放中心靜脈導管可行性。2024年持續監測。
+3月，13PW兩件Port-A
+5月，05W2(Port-A)、CTR(Port-A)、05W4(Cath)
+7月，11C (CATH)、11D(CATH)
+8月，05W3(CATH)、14PE(Port-A)
+11月，13PW(Port-A)
+* 紅色代表困難置放cath`,
+  },
+  {
+    year: "2024",
+    indicator: "非起疱性化療藥品外滲發生件數",
+    target: 7,
+    monthly: [1, 0, 1, 2, 0, 0, 0, 0, 0, 1, 0, 0],
+    review: `達目標值，共發生5件案例，其中1件為兒科病童，4件為成人。兒科案例因PortA體積較小（mini 5Fr），隨病童年齡增長，皮下組織改變導致Port滑動，造成角針移位。成人案例中，2件發生於第一季，均因PortA圓盤較難觸摸及固定，護理師使用0.75吋角針置針後，因回血順暢誤認為位置適當，未確保針尖接觸圓盤底部，導致角針滑脫。針對此問題，已透過全院調訓課程加強角針選擇及外滲辨識教育，第二季後未再發生類似事件。另外2件分別發生於第二季與第四季，因個案屬困難周邊靜脈血管，導致外滲事件。事發單位已於單位內部宣導，建議類似案例需與醫療團隊及家屬討論置放中心靜脈導管的可行性。此指標為2025年全方位癌症防治策進計畫的監測項目，將持續監測。
+1月，04W2(Port-A)
+3月，06E2 (HAIC Port)
+4月，06E2 (Cath)、13PW(Port-A)
+10月，14C (Cath)
+* 紅色代表困難置放cath`,
+  },
+  {
+    year: "2025",
+    indicator: "非起疱性化療藥品外滲發生件數",
+    target: 8,
+    monthly: [0, 1, 2, 0, 1, 0, 0, 0, 0, 1, 1, 0],
+    review: `達目標值，共6件成人案例。周邊靜脈導管外滲主因為血管功能不佳(4件)、長時間施打5FU合併病人活動頻繁(1件)及未即時通報不適(1件)；人工血管外滲與無回血判斷及影像參考不足相關。改善方式為強化血管評估、活動指導與病人即時回報衛教，並檢討修訂給藥流程。本指標為2026年全方位癌症防治策進計畫監測項目，將持續追蹤。
+2月，06E2 (Cath)、05W4 (Cath)
+3月，CTR (Port-A)
+5月，14D (Cath)
+10月，05W4  (Cath)
+11月，14D (Cath)
+* 紅色代表困難置放cath`,
+  },
+  {
+    year: "2022",
+    indicator: "針劑型化療藥品給藥異常件數",
+    target: 0,
+    monthly: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    review: "達目標值。因屬於2023年全方位癌症防治策進計畫應辦業務與診療品質認證監測項目，2023年持續每月監測。",
+  },
+  {
+    year: "2023",
+    indicator: "針劑型化療藥品給藥異常件數",
+    target: 0,
+    monthly: [0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
+    review:
+      "未達目標值，全年度發生2件。其中1件為給藥途徑錯誤，原因為護理師被病童家長訊息干擾，也慣性認為給藥途徑為靜脈推注(醫囑給藥途徑為肌肉注射)，給藥過程未落實核對途徑。改善措施：病童報到時先確認醫囑，再核對病童家長主訴的治療，若兩者不一致，需與醫師澄清；固定由兩位護理師協助完成施打化療藥品以提高人員專注度。另1件為給藥速率設定錯誤，將當次預計輸注Cisplatin的給藥流速275ml/hr，設定為下一筆5FU的給藥流速25 ml/hr。主護護理師設定Cisplatin的給藥流速時，直覺誤將其認為是輸注5FU，因此設定錯誤給藥流速。複核護理師核對過程未確實核對流速，而未能偵測設定異常。改善措施：為減少人工核對過程產生的人為潛在失誤，單位全面使用化療APP的PUMP影像辨識功能，並進行PDCA改善。因屬於2024年全方位癌症防治策進計畫應辦業務與癌症診療品質認證監測項目，2024年持續監測。",
+  },
+  {
+    year: "2024",
+    indicator: "針劑型化療藥品給藥異常件數",
+    target: 0,
+    monthly: [0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0],
+    review:
+      "未達目標值，全年度共發生3件案例，第1件，新進護理師未熟悉操作步驟，未正確接入密閉給藥裝置的 Adapter，且臨床教師未適當監督，導致延遲給藥。第2件，護理師對抗體藥物結合劑特性認識不足，未使用含過濾器的輸液套管。第3件，同時給藥時未確認輸液套管與輸液幫浦對應一致，導致流速異常。事發單位已透過教育訓練及病房會議進行改善宣導。此指標屬於2025年全方位癌症防治策進計畫的監測項目，將持續監測。",
+  },
+  {
+    year: "2025",
+    indicator: "針劑型化療藥品給藥異常件數",
+    target: 0,
+    monthly: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    review:
+      "未達目標值，主因該單位 AML 處方之 AraC Q12H 給藥時間規則原與院內規範不一致，存在兩種作法，致新人未能確實間隔 12 小時給藥。事發單位已完成作業流程調整，現行作法已與院內規範一致。此指標納入 2026 年全方位癌症防治策進計畫，將於 2026 年持續監測。",
+  },
+];
+
+const cn = (...classes) => classes.filter(Boolean).join(" ");
+
+function mean(values) {
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function sum(values) {
+  if (!values.length) return null;
+  return values.reduce((total, value) => total + value, 0);
+}
+
+function formatValue(value, unit, type) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  if (unit === "%") return `${value.toFixed(1)}${unit}`;
+  if (type === "sum") return `${Math.round(value)}${unit}`;
+  return `${value.toFixed(1)}${unit}`;
+}
+
+function getStatus(result, target, meta) {
+  if (result === null || target === null || target === undefined) {
+    return { achieved: false, label: "無有效資料" };
+  }
+  const achieved = meta.isNegative ? result <= target : result >= target;
+  return {
+    achieved,
+    label: achieved ? "達標" : "未達標",
+  };
+}
+
+function summarizeIndicator(indicator, rows, selectedMonthIndexes) {
+  const meta = indicatorMeta[indicator];
+  const values = [];
+  const targets = [];
+
+  rows.forEach((row) => {
+    const selectedValues = selectedMonthIndexes
+      .map((monthIndex) => row.monthly[monthIndex])
+      .filter((value) => value !== null && value !== undefined);
+
+    if (!selectedValues.length) return;
+
+    values.push(...selectedValues);
+
+    if (meta.type === "avg") {
+      targets.push(row.target);
+    } else {
+      const monitoredMonthCount = selectedMonthIndexes.filter((monthIndex) => {
+        const value = row.monthly[monthIndex];
+        return value !== null && value !== undefined;
+      }).length;
+      targets.push(row.target * (monitoredMonthCount / 12));
+    }
+  });
+
+  const result = meta.type === "avg" ? mean(values) : sum(values);
+  const target = meta.type === "avg" ? mean(targets) : sum(targets);
+  const status = getStatus(result, target, meta);
+
+  return {
+    indicator,
+    result,
+    target,
+    meta,
+    hasData: values.length > 0,
+    ...status,
+  };
+}
+
+function quarterAggregate(row, quarter, selectedMonthIndexes, type) {
+  const activeMonths = quarter.months.filter((m) => selectedMonthIndexes.includes(m));
+  if (!activeMonths.length) return null;
+  const values = activeMonths
+    .map((monthIndex) => row.monthly[monthIndex])
+    .filter((value) => value !== null && value !== undefined);
+
+  if (!values.length) return null;
+  return type === "avg" ? mean(values) : sum(values);
+}
+
+function pointTarget(row, meta, mode, monthsCount) {
+  if (meta.type === "avg") return row.target;
+  if (mode === "month") return row.target / 12;
+  return (row.target * monthsCount) / 12;
+}
+
+function App() {
+  const indicatorNames = Object.keys(indicatorMeta);
+  const [viewMode, setViewMode] = useState("overview");
+  const [timeMode, setTimeMode] = useState("month");
+  const [selectedYears, setSelectedYears] = useState(["2024", "2025"]);
+  const [selectedMonths, setSelectedMonths] = useState(MONTHS.map((m) => m.index));
+  const [selectedIndicator, setSelectedIndicator] = useState(indicatorNames[0]);
+
+  const recordsByIndicator = useMemo(() => {
+    return indicatorNames.reduce((acc, indicator) => {
+      acc[indicator] = rawData
+        .filter((item) => item.indicator === indicator && selectedYears.includes(item.year))
+        .sort((a, b) => Number(a.year) - Number(b.year));
+      return acc;
+    }, {});
+  }, [indicatorNames, selectedYears]);
+
+  const overviewCards = useMemo(() => {
+    return indicatorNames.map((indicator) =>
+      summarizeIndicator(indicator, recordsByIndicator[indicator], selectedMonths)
     );
-    const ActivityIcon = (p) => <Icon {...p} path={<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>} />;
-    const DashboardIcon = (p) => <Icon {...p} path={<><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></>} />;
-    const TrendingIcon = (p) => <Icon {...p} path={<><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></>} />;
-    const CheckCircleIcon = (p) => <Icon {...p} path={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>} />;
-    const AlertCircleIcon = (p) => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></>} />;
-    const CalendarIcon = (p) => <Icon {...p} path={<><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></>} />;
-    const FilterIcon = (p) => <Icon {...p} path={<><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></>} />;
-    const ChevronRightIcon = (p) => <Icon {...p} path={<polyline points="9 18 15 12 9 6"/>} />;
-    const StethoscopeIcon = (p) => <Icon {...p} path={<><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></>} />;
-    const FileTextIcon = (p) => <Icon {...p} path={<><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></>} />;
+  }, [indicatorNames, recordsByIndicator, selectedMonths]);
 
-    // --- 資料結構定義 ---
-    const indicatorMeta = {
-      "化學治療靜脈給藥過程完成率": { type: "avg", isNegative: false, unit: "%" },
-      "化療藥品外滲處理過程完成率": { type: "avg", isNegative: false, unit: "%" },
-      "化療藥品外滲發生處理完成率": { type: "avg", isNegative: false, unit: "%" },
-      "非起疱性化療藥品外滲發生件數": { type: "sum", isNegative: true, unit: "件" },
-      "起疱性化療藥品外滲發生件數": { type: "sum", isNegative: true, unit: "件" },
-      "針劑型化療給藥護理紀錄完整率": { type: "avg", isNegative: false, unit: "%" },
-      "針劑型化療藥品給藥異常件數": { type: "sum", isNegative: true, unit: "件" },
-      "護理師處理化療給藥自我安全防護完整率": { type: "avg", isNegative: false, unit: "%" }
+  const globalAchievement = useMemo(() => {
+    const validCards = overviewCards.filter((card) => card.hasData);
+    const achievedCards = validCards.filter((card) => card.achieved);
+    const percentage = validCards.length
+      ? (achievedCards.length / validCards.length) * 100
+      : 0;
+
+    return {
+      achieved: achievedCards.length,
+      total: validCards.length,
+      percentage,
     };
+  }, [overviewCards]);
 
-    // 模擬完整資料集
-    const generateMockData = () => {
-      const years = ["2022", "2023", "2024", "2025"];
-      let data = [];
-      years.forEach(year => {
-        Object.keys(indicatorMeta).forEach(indicator => {
-          const meta = indicatorMeta[indicator];
-          let target, monthly, review;
-          if (meta.type === "avg") {
-            target = 100;
-            monthly = Array.from({ length: 12 }, () => Number((95 + Math.random() * 5).toFixed(1)));
-            review = `${year}年度「${indicator}」持續監測。未達標月份已排定線上教育訓練，強化同仁對標準作業流程的熟悉度，並將於下年度持續追蹤列管。`;
-          } else {
-            if (indicator === "非起疱性化療藥品外滲發生件數") {
-              target = 8;
-              monthly = Array.from({ length: 12 }, () => Math.random() > 0.7 ? Math.floor(Math.random() * 3) : 0);
-            } else if (indicator === "起疱性化療藥品外滲發生件數") {
-              target = 0;
-              monthly = Array.from({ length: 12 }, () => Math.random() > 0.95 ? 1 : 0);
-            } else {
-              target = 0;
-              monthly = Array.from({ length: 12 }, () => Math.random() > 0.9 ? 1 : 0);
-            }
-            review = `${year}年度「${indicator}」共發生 ${monthly.reduce((a,b)=>a+b,0)} 件。主因為病人血管條件不佳或活動頻繁導致。已宣導加強給藥前血管評估與病人衛教。`;
-          }
-          data.push({ year, indicator, target, monthly, review });
-        });
-      });
-      return data;
-    };
+  const detailRows = useMemo(() => {
+    return recordsByIndicator[selectedIndicator] || [];
+  }, [recordsByIndicator, selectedIndicator]);
 
-    const rawData = generateMockData();
+  const detailMeta = indicatorMeta[selectedIndicator];
 
-    // 輔助函數
-    const safeAvg = (arr) => {
-      const valid = arr.filter(v => v !== null && v !== undefined);
-      return valid.length ? Number((valid.reduce((a,b) => a + b, 0) / valid.length).toFixed(1)) : null;
-    };
-    const safeSum = (arr) => {
-      const valid = arr.filter(v => v !== null && v !== undefined);
-      return valid.length ? valid.reduce((a,b) => a + b, 0) : null;
-    };
-    const checkIsGood = (value, target, isNegative) => {
-      if (value === null) return false;
-      return isNegative ? value <= target : value >= target;
-    };
+  const detailChartData = useMemo(() => {
+    if (!detailRows.length) return [];
 
-    // --- 主元件 ---
-    function App() {
-      const [selectedYears, setSelectedYears] = useState(["2024", "2025"]);
-      const [selectedMonths, setSelectedMonths] = useState(Array.from({ length: 12 }, (_, i) => i + 1));
-      const [viewMode, setViewMode] = useState("overview"); 
-      const [selectedIndicator, setSelectedIndicator] = useState("");
-      const [timeAggregation, setTimeAggregation] = useState("monthly"); 
+    if (timeMode === "month") {
+      return detailRows.flatMap((row) =>
+        selectedMonths
+          .map((monthIndex) => {
+            const value = row.monthly[monthIndex];
+            if (value === null || value === undefined) return null;
+            const target = pointTarget(row, detailMeta, "month", 1);
+            const achieved = detailMeta.isNegative ? value <= target : value >= target;
+            return {
+              name: `${row.year}/${String(monthIndex + 1).padStart(2, "0")}`,
+              shortName: `${monthIndex + 1}月`,
+              year: row.year,
+              value,
+              target,
+              achieved,
+            };
+          })
+          .filter(Boolean)
+      );
+    }
 
-      const toggleYear = (year) => {
-        setSelectedYears(prev => prev.includes(year) && prev.length > 1 ? prev.filter(y => y !== year) : [...new Set([...prev, year])]);
-      };
+    return detailRows.flatMap((row) =>
+      QUARTERS.map((quarter) => {
+        const value = quarterAggregate(row, quarter, selectedMonths, detailMeta.type);
+        if (value === null) return null;
+        const activeCount = quarter.months.filter((m) => {
+          if (!selectedMonths.includes(m)) return false;
+          const monthValue = row.monthly[m];
+          return monthValue !== null && monthValue !== undefined;
+        }).length;
+        const target = pointTarget(row, detailMeta, "quarter", activeCount);
+        const achieved = detailMeta.isNegative ? value <= target : value >= target;
+        return {
+          name: `${row.year}/${quarter.label}`,
+          shortName: quarter.label,
+          year: row.year,
+          value,
+          target,
+          achieved,
+        };
+      }).filter(Boolean)
+    );
+  }, [detailRows, selectedMonths, detailMeta, timeMode]);
 
-      const toggleMonth = (month) => {
-        setSelectedMonths(prev => prev.includes(month) && prev.length > 1 ? prev.filter(m => m !== month) : [...new Set([...prev, month])].sort((a,b)=>a-b));
-      };
+  const latestReview = useMemo(() => {
+    const rows = [...detailRows].sort((a, b) => Number(b.year) - Number(a.year));
+    return rows[0]?.review || "目前沒有可顯示的檢討與改善內容。";
+  }, [detailRows]);
 
-      const handleIndicatorSelect = (indicator) => {
-        setSelectedIndicator(indicator);
-        if (indicator) setViewMode("detail");
-        else setViewMode("overview");
-      };
+  const detailSummary = useMemo(() => {
+    return summarizeIndicator(selectedIndicator, detailRows, selectedMonths);
+  }, [detailRows, selectedIndicator, selectedMonths]);
 
-      const overviewCards = useMemo(() => {
-        return Object.keys(indicatorMeta).map(indicator => {
-          const meta = indicatorMeta[indicator];
-          const records = rawData.filter(d => d.indicator === indicator && selectedYears.includes(d.year));
-          let allValues = [];
-          let targets = [];
-          
-          records.forEach(record => {
-            targets.push(record.target);
-            selectedMonths.forEach(m => {
-              if (record.monthly[m - 1] !== null) allValues.push(record.monthly[m - 1]);
-            });
-          });
+  const chartTargetAverage = useMemo(() => {
+    if (!detailChartData.length) return null;
+    return mean(detailChartData.map((item) => item.target));
+  }, [detailChartData]);
 
-          const actualValue = meta.type === "avg" ? safeAvg(allValues) : safeSum(allValues);
-          const avgTarget = safeAvg(targets) || 0; 
-          const isGood = checkIsGood(actualValue, avgTarget, meta.isNegative);
+  const toggleYear = (year) => {
+    setSelectedYears((prev) => {
+      if (prev.includes(year)) {
+        if (prev.length === 1) return prev;
+        return prev.filter((item) => item !== year);
+      }
+      return [...prev, year].sort();
+    });
+  };
 
-          return { name: indicator, meta, value: actualValue, target: avgTarget, isGood };
-        });
-      }, [selectedYears, selectedMonths]);
+  const toggleMonth = (monthIndex) => {
+    setSelectedMonths((prev) => {
+      if (prev.includes(monthIndex)) {
+        if (prev.length === 1) return prev;
+        return prev.filter((item) => item !== monthIndex);
+      }
+      return [...prev, monthIndex].sort((a, b) => a - b);
+    });
+  };
 
-      const overallComplianceRate = useMemo(() => {
-        const validCards = overviewCards.filter(c => c.value !== null);
-        if (validCards.length === 0) return 0;
-        const goodCards = validCards.filter(c => c.isGood);
-        return Math.round((goodCards.length / validCards.length) * 100);
-      }, [overviewCards]);
+  const renderStatBadge = (achieved) => {
+    return achieved ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+        <CheckCircle2 className="h-4 w-4" /> 達標
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+        <AlertTriangle className="h-4 w-4" /> 未達標
+      </span>
+    );
+  };
 
-      const detailChartData = useMemo(() => {
-        if (!selectedIndicator) return [];
-        const meta = indicatorMeta[selectedIndicator];
-        const records = rawData.filter(d => d.indicator === selectedIndicator && selectedYears.includes(d.year)).sort((a,b) => a.year.localeCompare(b.year));
-        let chartData = [];
-
-        records.forEach(record => {
-          if (timeAggregation === "monthly") {
-            selectedMonths.forEach(m => {
-              const val = record.monthly[m - 1];
-              if (val !== null) chartData.push({ name: `${record.year}-${String(m).padStart(2, '0')}`, value: val, target: record.target });
-            });
-          } else {
-            const quarters = [[1,2,3], [4,5,6], [7,8,9], [10,11,12]];
-            quarters.forEach((qMonths, qIdx) => {
-              const validSelectedMonthsInQ = qMonths.filter(m => selectedMonths.includes(m));
-              if (validSelectedMonthsInQ.length > 0) {
-                const vals = validSelectedMonthsInQ.map(m => record.monthly[m - 1]).filter(v => v !== null);
-                const qVal = meta.type === "avg" ? safeAvg(vals) : safeSum(vals);
-                let qTarget = record.target;
-                if(meta.type === "sum") qTarget = Number((record.target / 4).toFixed(1)); 
-
-                if (qVal !== null) chartData.push({ name: `${record.year}-Q${qIdx + 1}`, value: qVal, target: qTarget });
-              }
-            });
-          }
-        });
-        return chartData;
-      }, [selectedIndicator, selectedYears, selectedMonths, timeAggregation]);
-
-      const latestReview = useMemo(() => {
-        if (!selectedIndicator || selectedYears.length === 0) return "";
-        const sortedYears = [...selectedYears].sort((a,b) => b.localeCompare(a));
-        const record = rawData.find(d => d.indicator === selectedIndicator && d.year === sortedYears[0]);
-        return record?.review || "無相關檢討與改善紀錄。";
-      }, [selectedIndicator, selectedYears]);
-
-      return (
-        <div className="flex h-screen w-full bg-slate-50 text-slate-800 font-sans overflow-hidden">
-          
-          {/* 左側邊欄 */}
-          <div className="w-72 bg-white shadow-xl z-10 flex flex-col rounded-r-3xl border-r border-slate-100">
-            <div className="p-6 border-b border-slate-100 flex items-center space-x-3">
-              <div className="bg-blue-600 p-2 rounded-xl">
-                <StethoscopeIcon className="text-white w-6 h-6" />
-              </div>
-              <h1 className="text-xl font-bold text-slate-800">癌症品管中心</h1>
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800">
+      <div className="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 md:p-6 xl:flex-row">
+        <aside className="w-full rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm xl:sticky xl:top-6 xl:h-fit xl:w-[320px]">
+          <div className="mb-6 flex items-center gap-3">
+            <div className="rounded-2xl bg-blue-50 p-3 text-blue-600">
+              <Filter className="h-6 w-6" />
             </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-8">
-              <div className="space-y-3">
-                <label className="flex items-center text-sm font-semibold text-slate-500 uppercase tracking-wider">
-                  <FilterIcon className="w-4 h-4 mr-2" /> 指標切換
-                </label>
-                <select 
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium"
-                  value={selectedIndicator}
-                  onChange={(e) => handleIndicatorSelect(e.target.value)}
-                >
-                  <option value="">-- 全院品質總覽 --</option>
-                  {Object.keys(indicatorMeta).map(ind => <option key={ind} value={ind}>{ind}</option>)}
-                </select>
-              </div>
-
-              <div className="space-y-3">
-                <label className="flex items-center text-sm font-semibold text-slate-500 uppercase tracking-wider">
-                  <CalendarIcon className="w-4 h-4 mr-2" /> 監測年度
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {["2022", "2023", "2024", "2025"].map(year => (
-                    <button key={year} onClick={() => toggleYear(year)}
-                      className={`py-2 rounded-xl text-sm font-medium transition-all ${selectedYears.includes(year) ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'}`}
-                    >{year}</button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <label className="flex items-center text-sm font-semibold text-slate-500 uppercase tracking-wider">
-                  <ActivityIcon className="w-4 h-4 mr-2" /> 詳細月份
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
-                    <button key={month} onClick={() => toggleMonth(month)}
-                      className={`py-2 rounded-xl text-xs font-medium transition-all ${selectedMonths.includes(month) ? 'bg-blue-100 text-blue-700 border-blue-200 border' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
-                    >{month}月</button>
-                  ))}
-                </div>
-              </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">多維度篩選器</p>
+              <h2 className="text-xl font-bold text-slate-900">癌症照護品管儀表板</h2>
             </div>
           </div>
 
-          {/* 右側主內容區 */}
-          <div className="flex-1 flex flex-col h-full overflow-hidden">
-            <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-5 flex justify-between items-center z-0">
-              <div className="flex items-center space-x-2">
-                <button onClick={() => handleIndicatorSelect("")} className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-colors ${viewMode === 'overview' ? 'bg-slate-100 text-blue-600 font-semibold' : 'text-slate-500 hover:bg-slate-50'}`}>
-                  <DashboardIcon className="w-5 h-5" /><span>全院總覽</span>
-                </button>
-                <ChevronRightIcon className="w-4 h-4 text-slate-300" />
-                <span className={`px-4 py-2 rounded-xl flex items-center space-x-2 ${viewMode === 'detail' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-slate-400'}`}>
-                  <TrendingIcon className="w-5 h-5" /><span>{viewMode === 'detail' ? selectedIndicator : '趨勢分析'}</span>
-                </span>
+          <div className="space-y-6">
+            <section>
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <CalendarRange className="h-4 w-4 text-blue-600" />
+                年度篩選區間
               </div>
-              <div className="text-sm font-medium text-slate-500 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
-                已選區間: {selectedYears.sort().join(", ")} | {selectedMonths.length} 個月份
+              <div className="flex flex-wrap gap-2">
+                {YEARS.map((year) => {
+                  const active = selectedYears.includes(year);
+                  return (
+                    <button
+                      key={year}
+                      onClick={() => toggleYear(year)}
+                      className={cn(
+                        "rounded-2xl border px-4 py-2 text-sm font-medium transition",
+                        active
+                          ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50"
+                      )}
+                    >
+                      {year}
+                    </button>
+                  );
+                })}
               </div>
-            </header>
+            </section>
 
-            <main className="flex-1 overflow-y-auto p-8">
-              {viewMode === "overview" && (
-                <div className="space-y-8">
-                  <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 flex items-center justify-between">
-                    <div>
-                      <h2 className="text-3xl font-bold text-slate-800 mb-2">整體品質達標率</h2>
-                      <p className="text-slate-500 font-medium">基於當前篩選條件下，達成年度目標之指標比例</p>
-                    </div>
-                    <div className="flex items-end space-x-2">
-                      <span className={`text-6xl font-extrabold ${overallComplianceRate >= 80 ? 'text-emerald-500' : 'text-rose-500'}`}>{overallComplianceRate}</span>
-                      <span className="text-2xl font-bold text-slate-400 pb-1">%</span>
-                    </div>
-                  </div>
+            <section>
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <ClipboardList className="h-4 w-4 text-blue-600" />
+                月份詳細核取
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {MONTHS.map((month) => {
+                  const active = selectedMonths.includes(month.index);
+                  return (
+                    <button
+                      key={month.key}
+                      onClick={() => toggleMonth(month.index)}
+                      className={cn(
+                        "rounded-2xl border px-3 py-2 text-sm transition",
+                        active
+                          ? "border-blue-600 bg-blue-50 font-semibold text-blue-700"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-slate-50"
+                      )}
+                    >
+                      {month.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {overviewCards.map((card, idx) => (
-                      <div key={idx} onClick={() => handleIndicatorSelect(card.name)} className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className={`p-2 rounded-xl ${card.isGood ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                            {card.isGood ? <CheckCircleIcon className="w-6 h-6" /> : <AlertCircleIcon className="w-6 h-6" />}
-                          </div>
-                          <span className="text-xs font-bold px-2 py-1 bg-slate-100 text-slate-500 rounded-lg uppercase">{card.meta.type === 'avg' ? '平均型' : '加總型'}</span>
-                        </div>
-                        <h3 className="font-bold text-slate-700 text-lg leading-tight mb-4 group-hover:text-blue-600 transition-colors">{card.name}</h3>
-                        <div className="flex items-end justify-between mt-auto">
-                          <div>
-                            <p className="text-xs text-slate-400 font-medium mb-1">結算數值</p>
-                            <div className="flex items-baseline space-x-1">
-                              <span className={`text-3xl font-bold ${card.isGood ? 'text-slate-800' : 'text-rose-600'}`}>{card.value !== null ? card.value : '-'}</span>
-                              <span className="text-sm font-semibold text-slate-500">{card.meta.unit}</span>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs text-slate-400 font-medium mb-1">目標值</p>
-                            <span className="text-sm font-bold text-slate-600">{card.meta.isNegative ? '≤' : '≥'} {card.target} {card.meta.unit}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+            <section>
+              <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <TrendingUp className="h-4 w-4 text-blue-600" />
+                快速跳轉指標
+              </label>
+              <select
+                value={selectedIndicator}
+                onChange={(e) => {
+                  setSelectedIndicator(e.target.value);
+                  if (viewMode === "overview") setViewMode("detail");
+                }}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-0 transition focus:border-blue-500"
+              >
+                {indicatorNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </section>
+
+            <section className="rounded-[1.75rem] bg-slate-900 p-4 text-white shadow-xl">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-300">
+                <Activity className="h-4 w-4 text-blue-300" />
+                當前檢視摘要
+              </div>
+              <div className="space-y-2 text-sm">
+                <p>
+                  年度：<span className="font-semibold">{selectedYears.join("、")}</span>
+                </p>
+                <p>
+                  月份：
+                  <span className="font-semibold">
+                    {selectedMonths.length === 12
+                      ? " 全年度"
+                      : ` ${selectedMonths.map((m) => m + 1).join("、")}月`}
+                  </span>
+                </p>
+                <p>
+                  模式：
+                  <span className="font-semibold">{viewMode === "overview" ? "全院品質總覽" : "單一指標趨勢分析"}</span>
+                </p>
+              </div>
+            </section>
+          </div>
+        </aside>
+
+        <main className="min-w-0 flex-1 space-y-6">
+          <header className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
+                  <Stethoscope className="h-4 w-4" /> 癌症照護品質監測
                 </div>
-              )}
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+                  癌症照護品管儀表板
+                </h1>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 md:text-base">
+                  讓管理階層快速掌握整體品質健康度，並可下鑽檢視單一指標趨勢與檢討改善內容。
+                </p>
+              </div>
 
-              {viewMode === "detail" && selectedIndicator && (
-                <div className="space-y-6">
-                  <div className="flex justify-between items-end mb-2">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setViewMode("overview")}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-semibold transition",
+                    viewMode === "overview"
+                      ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50"
+                  )}
+                >
+                  <LayoutDashboard className="h-4 w-4" /> 全院品質總覽
+                </button>
+                <button
+                  onClick={() => setViewMode("detail")}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-semibold transition",
+                    viewMode === "detail"
+                      ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50"
+                  )}
+                >
+                  <TrendingUp className="h-4 w-4" /> 單一指標趨勢分析
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {viewMode === "overview" ? (
+            <>
+              <section className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+                <div className="rounded-[2rem] bg-gradient-to-br from-blue-600 to-blue-700 p-6 text-white shadow-xl">
+                  <div className="mb-4 flex items-center gap-2 text-blue-100">
+                    <Activity className="h-5 w-5" />
+                    所選期間整體達標率
+                  </div>
+                  <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div>
-                      <h2 className="text-2xl font-bold text-slate-800 mb-1">{selectedIndicator}</h2>
-                      <p className="text-slate-500 font-medium flex items-center">
-                        <span className="mr-4">單位: {indicatorMeta[selectedIndicator].unit}</span>
-                        <span>屬性: {indicatorMeta[selectedIndicator].isNegative ? '負向指標 (越低越好)' : '正向指標 (越高越好)'}</span>
+                      <div className="text-5xl font-bold tracking-tight md:text-6xl">
+                        {globalAchievement.percentage.toFixed(1)}%
+                      </div>
+                      <p className="mt-3 text-sm text-blue-100 md:text-base">
+                        達標指標 {globalAchievement.achieved} 項 ／ 有效指標 {globalAchievement.total} 項
                       </p>
                     </div>
-                    <div className="flex bg-slate-200 p-1 rounded-xl">
-                      <button onClick={() => setTimeAggregation('monthly')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${timeAggregation === 'monthly' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>按月展開</button>
-                      <button onClick={() => setTimeAggregation('quarterly')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${timeAggregation === 'quarterly' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>按季聚合</button>
+                    <div className="rounded-[1.5rem] bg-white/10 p-4 backdrop-blur-sm">
+                      <p className="text-sm text-blue-100">儀表板判讀</p>
+                      <p className="mt-2 text-lg font-semibold">
+                        {globalAchievement.percentage >= 85
+                          ? "整體健康度良好"
+                          : globalAchievement.percentage >= 70
+                          ? "需持續追蹤"
+                          : "建議啟動改善方案"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <ChevronRight className="h-4 w-4 text-blue-600" />
+                    判讀原則
+                  </div>
+                  <div className="space-y-4 text-sm leading-6 text-slate-600">
+                    <p>
+                      平均型指標以所選月份平均值比較目標；加總型指標則依選取月份比例換算允收門檻。
+                    </p>
+                    <div className="flex items-center gap-3 rounded-2xl bg-emerald-50 p-3 text-emerald-700">
+                      <CheckCircle2 className="h-5 w-5 shrink-0" />
+                      正向指標高於目標為達標；負向指標低於目標為達標。
+                    </div>
+                    <div className="flex items-center gap-3 rounded-2xl bg-rose-50 p-3 text-rose-700">
+                      <AlertTriangle className="h-5 w-5 shrink-0" />
+                      點擊任一卡片可立即下鑽至單一指標趨勢與檢討區。
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+                {overviewCards.map((card) => (
+                  <button
+                    key={card.indicator}
+                    onClick={() => {
+                      setSelectedIndicator(card.indicator);
+                      setViewMode("detail");
+                    }}
+                    className="group rounded-[2rem] border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl"
+                  >
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div className="rounded-2xl bg-slate-100 p-3 text-slate-600 transition group-hover:bg-blue-50 group-hover:text-blue-600">
+                        <Activity className="h-5 w-5" />
+                      </div>
+                      {card.hasData ? renderStatBadge(card.achieved) : (
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                          無資料
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="min-h-[56px] text-base font-bold leading-6 text-slate-900">
+                      {card.indicator}
+                    </h3>
+
+                    <div className="mt-5 grid grid-cols-2 gap-3">
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-xs font-medium text-slate-500">結算數值</p>
+                        <p
+                          className={cn(
+                            "mt-2 text-2xl font-bold",
+                            !card.hasData
+                              ? "text-slate-400"
+                              : card.achieved
+                              ? "text-emerald-600"
+                              : "text-rose-600"
+                          )}
+                        >
+                          {formatValue(card.result, card.meta.unit, card.meta.type)}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-xs font-medium text-slate-500">目標值</p>
+                        <p className="mt-2 text-2xl font-bold text-slate-900">
+                          {formatValue(card.target, card.meta.unit, card.meta.type)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
+                      <span>
+                        類型：{card.meta.type === "avg" ? "平均型" : "加總型"}／
+                        {card.meta.isNegative ? "負向" : "正向"}
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-medium text-blue-600">
+                        查看詳情 <ChevronRight className="h-4 w-4" />
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </section>
+            </>
+          ) : (
+            <>
+              <section className="grid gap-4 xl:grid-cols-[1.4fr_0.8fr]">
+                <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+                  <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <button
+                        onClick={() => setViewMode("overview")}
+                        className="mb-3 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-200"
+                      >
+                        <ArrowLeft className="h-4 w-4" /> 返回總覽
+                      </button>
+                      <h2 className="text-2xl font-bold text-slate-900">{selectedIndicator}</h2>
+                      <p className="mt-2 text-sm text-slate-500">
+                        依指標屬性自動切換圖表型態，並支援月份與季度視角分析。
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setTimeMode("month")}
+                        className={cn(
+                          "rounded-2xl border px-4 py-2 text-sm font-semibold transition",
+                          timeMode === "month"
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50"
+                        )}
+                      >
+                        依月份展開
+                      </button>
+                      <button
+                        onClick={() => setTimeMode("quarter")}
+                        className={cn(
+                          "rounded-2xl border px-4 py-2 text-sm font-semibold transition",
+                          timeMode === "quarter"
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50"
+                        )}
+                      >
+                        依季度聚合
+                      </button>
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
-                    <div className="h-[400px] w-full">
+                  <div className="mb-5 grid gap-3 md:grid-cols-3">
+                    <div className="rounded-[1.5rem] bg-slate-50 p-4">
+                      <p className="text-xs font-medium text-slate-500">結算數值</p>
+                      <p
+                        className={cn(
+                          "mt-2 text-3xl font-bold",
+                          detailSummary.hasData
+                            ? detailSummary.achieved
+                              ? "text-emerald-600"
+                              : "text-rose-600"
+                            : "text-slate-400"
+                        )}
+                      >
+                        {formatValue(detailSummary.result, detailMeta.unit, detailMeta.type)}
+                      </p>
+                    </div>
+                    <div className="rounded-[1.5rem] bg-slate-50 p-4">
+                      <p className="text-xs font-medium text-slate-500">目標值</p>
+                      <p className="mt-2 text-3xl font-bold text-slate-900">
+                        {formatValue(detailSummary.target, detailMeta.unit, detailMeta.type)}
+                      </p>
+                    </div>
+                    <div className="rounded-[1.5rem] bg-slate-50 p-4">
+                      <p className="text-xs font-medium text-slate-500">健康度判定</p>
+                      <div className="mt-3">{renderStatBadge(detailSummary.achieved)}</div>
+                    </div>
+                  </div>
+
+                  <div className="h-[420px] w-full rounded-[1.5rem] bg-slate-50 p-3 md:p-4">
+                    {detailChartData.length ? (
                       <ResponsiveContainer width="100%" height="100%">
-                        {indicatorMeta[selectedIndicator].type === "avg" ? (
-                          <LineChart data={detailChartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                            <XAxis dataKey="name" tick={{fill: '#64748b', fontSize: 12}} tickLine={false} axisLine={false} dy={10} />
-                            <YAxis domain={['auto', 'auto']} tick={{fill: '#64748b', fontSize: 12}} tickLine={false} axisLine={false} dx={-10} />
-                            <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} itemStyle={{ fontWeight: 'bold' }} />
-                            <Legend wrapperStyle={{ paddingTop: '20px' }}/>
-                            <ReferenceLine y={detailChartData[0]?.target} label="目標值" stroke="#94a3b8" strokeDasharray="3 3" />
-                            <Line type="monotone" name="結算數值" dataKey="value" stroke="#2563eb" strokeWidth={4} dot={{ r: 6, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 8, fill: '#2563eb' }} />
+                        {detailMeta.type === "avg" ? (
+                          <LineChart data={detailChartData} margin={{ top: 20, right: 24, left: 0, bottom: 8 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+                            <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#64748b" />
+                            <YAxis
+                              tick={{ fontSize: 12 }}
+                              stroke="#64748b"
+                              domain={[80, (dataMax) => Math.max(100, Math.ceil(dataMax + 1))]}
+                            />
+                            <Tooltip
+                              contentStyle={{ borderRadius: 20, borderColor: "#e2e8f0" }}
+                              formatter={(value, name, item) => {
+                                if (name === "value") {
+                                  return [
+                                    formatValue(Number(value), detailMeta.unit, detailMeta.type),
+                                    "實際值",
+                                  ];
+                                }
+                                return [
+                                  formatValue(item?.payload?.target, detailMeta.unit, detailMeta.type),
+                                  "目標值",
+                                ];
+                              }}
+                            />
+                            <Legend />
+                            {chartTargetAverage !== null && (
+                              <ReferenceLine
+                                y={chartTargetAverage}
+                                stroke="#0f172a"
+                                strokeDasharray="6 6"
+                                label={{ value: "平均目標", position: "insideTopRight", fill: "#0f172a" }}
+                              />
+                            )}
+                            <Line
+                              type="monotone"
+                              dataKey="value"
+                              name="實際值"
+                              stroke="#2563eb"
+                              strokeWidth={3}
+                              dot={{ r: 4, fill: "#2563eb" }}
+                              activeDot={{ r: 6 }}
+                              label={({ x, y, value }) => {
+                                if (value === null || value === undefined) return null;
+                                return (
+                                  <text
+                                    x={x}
+                                    y={y - 12}
+                                    textAnchor="middle"
+                                    fontSize={12}
+                                    fontWeight={600}
+                                    fill="#1e293b"
+                                  >
+                                    {formatValue(Number(value), detailMeta.unit, detailMeta.type)}
+                                  </text>
+                                );
+                              }}
+                            />
                           </LineChart>
                         ) : (
-                          <BarChart data={detailChartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} barSize={32}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                            <XAxis dataKey="name" tick={{fill: '#64748b', fontSize: 12}} tickLine={false} axisLine={false} dy={10} />
-                            <YAxis tick={{fill: '#64748b', fontSize: 12}} tickLine={false} axisLine={false} dx={-10} />
-                            <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} cursor={{ fill: '#f1f5f9' }} />
-                            <ReferenceLine y={detailChartData[0]?.target} label="目標值" stroke="#94a3b8" strokeDasharray="3 3" />
-                            <Bar dataKey="value" name="結算數值" radius={[6, 6, 0, 0]}>
-                              {detailChartData.map((entry, index) => {
-                                const isGood = checkIsGood(entry.value, entry.target, indicatorMeta[selectedIndicator].isNegative);
-                                return <Cell key={`cell-${index}`} fill={isGood ? '#10b981' : '#f43f5e'} />;
-                              })}
+                          <BarChart data={detailChartData} margin={{ top: 20, right: 24, left: 0, bottom: 8 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+                            <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#64748b" />
+                            <YAxis tick={{ fontSize: 12 }} stroke="#64748b" allowDecimals={false} />
+                            <Tooltip
+                              contentStyle={{ borderRadius: 20, borderColor: "#e2e8f0" }}
+                              formatter={(value, name, item) => {
+                                if (name === "value") {
+                                  return [
+                                    formatValue(Number(value), detailMeta.unit, detailMeta.type),
+                                    "實際值",
+                                  ];
+                                }
+                                return [
+                                  formatValue(item?.payload?.target, detailMeta.unit, detailMeta.type),
+                                  "目標值",
+                                ];
+                              }}
+                            />
+                            <Legend />
+                            {chartTargetAverage !== null && (
+                              <ReferenceLine
+                                y={chartTargetAverage}
+                                stroke="#0f172a"
+                                strokeDasharray="6 6"
+                                label={{ value: "平均目標", position: "insideTopRight", fill: "#0f172a" }}
+                              />
+                            )}
+                            <Bar dataKey="value" name="實際值" radius={[12, 12, 0, 0]}>
+                              <LabelList
+                                dataKey="value"
+                                position="top"
+                                formatter={(value) =>
+                                  formatValue(Number(value), detailMeta.unit, detailMeta.type)
+                                }
+                                style={{ fill: "#1e293b", fontSize: 12, fontWeight: 600 }}
+                              />
+                              {detailChartData.map((entry, index) => (
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={entry.achieved ? "#10b981" : "#f43f5e"}
+                                />
+                              ))}
                             </Bar>
                           </BarChart>
                         )}
                       </ResponsiveContainer>
-                    </div>
-                    {indicatorMeta[selectedIndicator].type === "sum" && (
-                       <div className="flex justify-center mt-4 space-x-6 text-sm font-medium text-slate-500">
-                         <div className="flex items-center"><div className="w-3 h-3 rounded-full bg-emerald-500 mr-2"></div>達標 (安全)</div>
-                         <div className="flex items-center"><div className="w-3 h-3 rounded-full bg-rose-500 mr-2"></div>未達標 (異常)</div>
-                       </div>
+                    ) : (
+                      <div className="flex h-full items-center justify-center rounded-[1.5rem] border border-dashed border-slate-300 bg-white text-center text-slate-500">
+                        選定的年度與月份沒有可用資料，請調整左側篩選條件。
+                      </div>
                     )}
                   </div>
-
-                  <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-2 h-full bg-blue-500"></div>
-                    <div className="flex items-center mb-4">
-                      <FileTextIcon className="w-6 h-6 text-blue-600 mr-3" />
-                      <h3 className="text-xl font-bold text-slate-800">最新檢討與改善回饋</h3>
-                      <span className="ml-4 px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold">
-                        {Math.max(...selectedYears.map(Number))} 年度紀錄
-                      </span>
-                    </div>
-                    <p className="text-slate-600 leading-relaxed text-lg pl-9">{latestReview}</p>
-                  </div>
                 </div>
-              )}
-            </main>
-          </div>
-        </div>
-      );
-    }
 
-    // 啟動 React 應用
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
-</body>
-</html>
+                <div className="space-y-4">
+                  <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <Activity className="h-4 w-4 text-blue-600" />
+                      指標屬性
+                    </div>
+                    <div className="grid gap-3 text-sm text-slate-600">
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-xs text-slate-500">統計型態</p>
+                        <p className="mt-1 font-semibold text-slate-900">
+                          {detailMeta.type === "avg" ? "平均型（LineChart）" : "加總型（BarChart）"}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-xs text-slate-500">指標方向</p>
+                        <p className="mt-1 font-semibold text-slate-900">
+                          {detailMeta.isNegative ? "負向指標（越低越好）" : "正向指標（越高越好）"}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-xs text-slate-500">圖表著色規則</p>
+                        <p className="mt-1 font-semibold text-slate-900">
+                          達標為翡翠綠，未達標為玫瑰紅
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <ClipboardList className="h-4 w-4 text-blue-600" />
+                      檢討與改善內容
+                    </div>
+                    <div className="rounded-[1.5rem] bg-slate-50 p-4 text-sm leading-7 text-slate-700">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        選定年度中最新年度回饋
+                      </p>
+                      <p>{latestReview}</p>
+                    </div>
+                  </section>
+                </div>
+              </section>
+            </>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+export default App;
